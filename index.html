@@ -18,8 +18,9 @@
     <div id="canvas-container"></div>
 
     <!-- Load Three.js core and the glTF extension loaders -->
-    <script src="https://unpkg.com"></script>
-    <script src="https://unpkg.com"></script>
+    <script src="https://jsdelivr.net"></script>
+    <script src="https://jsdelivr.net"></script>
+
 
 
 
@@ -54,6 +55,7 @@
         
         // This targets your exact uploaded scene.gltf file
         const modelPath = 'https://github.io';
+
 
         loader.load(modelPath, function (gltf) {
             model = gltf.scene;
