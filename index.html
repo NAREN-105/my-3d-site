@@ -5,19 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Interactive 3D Model</title>
     <style>
-        body { margin: 0; background-color: #0d0d11; overflow: hidden; font-family: sans-serif; }
-        #canvas-container { width: 100vw; height: 100vh; }
+        html, body {
+            margin: 0;
+            background-color: #0d0d11;
+            font-family: sans-serif;
+            /* Tall page so there's room to scroll through the fly-through */
+            height: 400vh;
+        }
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+        }
         .loading-text {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             color: white; font-size: 1.5rem; letter-spacing: 2px; pointer-events: none;
+            z-index: 2;
+        }
+        .scroll-hint {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            color: rgba(255,255,255,0.6); font-size: 0.85rem; letter-spacing: 3px;
+            pointer-events: none; z-index: 2; transition: opacity 0.4s ease;
+            text-transform: uppercase;
         }
     </style>
 </head>
 <body>
     <div id="loading" class="loading-text">LOADING 3D MODEL...</div>
+    <div id="scroll-hint" class="scroll-hint">Scroll to explore</div>
     <div id="canvas-container"></div>
 
-    <!-- Import map: pin an actual Three.js version so the module URLs resolve -->
+    <!-- Import map: pinned Three.js version so module URLs resolve reliably -->
     <script type="importmap">
       {
         "imports": {
@@ -31,7 +52,7 @@
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-        // Setup the baseline WebGL Scene environments
+        // ---------- Base scene setup ----------
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 0, 8);
@@ -43,7 +64,7 @@
         renderer.toneMappingExposure = 1.2;
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-        // Add balanced lighting layers
+        // Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
         scene.add(ambientLight);
 
@@ -51,53 +72,149 @@
         mainLight.position.set(5, 10, 7);
         scene.add(mainLight);
 
-        // Load the model — relative path, since scene.gltf sits next to this file
+        // ---------- Hologram rim shader ----------
+        // A slightly-larger, additive, backside-rendered clone of each mesh that glows
+        // more at grazing angles (fresnel) and cycles hue over time. Sits on top of the
+        // real textured mesh without hiding it.
+        const hologramVertex = `
+            varying vec3 vNormal;
+            varying vec3 vViewDir;
+            void main() {
+                vNormal = normalize(normalMatrix * normal);
+                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                vViewDir = normalize(-mvPosition.xyz);
+                gl_Position = projectionMatrix * mvPosition;
+            }
+        `;
+        const hologramFragment = `
+            uniform float uTime;
+            varying vec3 vNormal;
+            varying vec3 vViewDir;
+
+            vec3 hsl2rgb(vec3 c) {
+                vec3 rgb = clamp(abs(mod(c.x * 6.0 + vec3(0.0,4.0,2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+                return c.z + c.y * (rgb - 0.5) * (1.0 - abs(2.0 * c.z - 1.0));
+            }
+
+            void main() {
+                float fresnel = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewDir)), 0.0), 2.2);
+                float hue = mod(uTime * 0.06, 1.0);
+                vec3 color = hsl2rgb(vec3(hue, 0.85, 0.55));
+                gl_FragColor = vec4(color, fresnel * 0.85);
+            }
+        `;
+        const hologramMaterials = []; // keep refs so we can update uTime each frame
+
+        function addHologramRim(mesh) {
+            const rimMat = new THREE.ShaderMaterial({
+                vertexShader: hologramVertex,
+                fragmentShader: hologramFragment,
+                uniforms: { uTime: { value: 0 } },
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                side: THREE.BackSide,
+                depthWrite: false
+            });
+            const rimMesh = new THREE.Mesh(mesh.geometry, rimMat);
+            rimMesh.scale.copy(mesh.scale).multiplyScalar(1.035);
+            mesh.add(rimMesh); // parent to original mesh so it follows position/rotation
+            hologramMaterials.push(rimMat);
+        }
+
+        // ---------- Load model ----------
         const loader = new GLTFLoader();
         let model;
         const modelPath = 'scene.gltf';
+
+        // Camera fly-through path — built after we know the model's size
+        let cameraPath = null;
+        let scrollProgress = 0;
 
         loader.load(modelPath, function (gltf) {
             model = gltf.scene;
             scene.add(model);
 
-            // Hide the loading text once complete
             document.getElementById('loading').style.display = 'none';
 
-            // Auto-center the imported object bounds inside the viewport camera
+            // Center the model at the origin
             const box = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
             model.position.x -= center.x;
             model.position.y -= center.y;
             model.position.z -= center.z;
+
+            // Add the hologram rim to every mesh in the model
+            model.traverse((child) => {
+                if (child.isMesh) addHologramRim(child);
+            });
+
+            // Build a fly-through path sized to the model
+            const size = box.getSize(new THREE.Vector3());
+            const r = Math.max(size.x, size.y, size.z, 1) * 1.4;
+
+            cameraPath = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(0, r * 0.15, r * 1.8),
+                new THREE.Vector3(r * 1.3, r * 0.5, r * 0.5),
+                new THREE.Vector3(r * 0.7, r * 0.9, -r * 1.3),
+                new THREE.Vector3(-r * 1.2, r * 0.1, -r * 0.6),
+                new THREE.Vector3(-r * 0.9, -r * 0.5, r * 1.1),
+                new THREE.Vector3(0, 0, r * 1.6)
+            ], false, 'catmullrom', 0.5);
+
         }, undefined, function (error) {
             console.error('Error loading glTF layout:', error);
             document.getElementById('loading').innerText = 'Failed to load 3D asset.';
         });
 
-        // Track the mouse cursor path coordinates
+        // ---------- Scroll-driven fly-through ----------
+        function updateScrollProgress() {
+            const max = document.body.scrollHeight - window.innerHeight;
+            scrollProgress = max > 0 ? window.scrollY / max : 0;
+            scrollProgress = Math.min(Math.max(scrollProgress, 0), 1);
+
+            const hint = document.getElementById('scroll-hint');
+            hint.style.opacity = scrollProgress > 0.03 ? '0' : '1';
+        }
+        window.addEventListener('scroll', updateScrollProgress);
+        updateScrollProgress();
+
+        // ---------- Mouse-follow (subtle secondary rotation on the model itself) ----------
         let targetX = 0;
         let targetY = 0;
-
         window.addEventListener('mousemove', (event) => {
             targetX = (event.clientX / window.innerWidth) - 0.5;
             targetY = (event.clientY / window.innerHeight) - 0.5;
         });
 
-        // Animation update loop frame sequence
+        // ---------- Animation loop ----------
+        const clock = new THREE.Clock();
+
         function animate() {
             requestAnimationFrame(animate);
+            const elapsed = clock.getElapsedTime();
 
-            // Smoothly rotate the asset towards the user's cursor orientation
+            // Update hologram shader time uniform
+            for (const mat of hologramMaterials) {
+                mat.uniforms.uTime.value = elapsed;
+            }
+
             if (model) {
-                model.rotation.y += (targetX * 2.5 - model.rotation.y) * 0.05;
-                model.rotation.x += (targetY * 2.5 - model.rotation.x) * 0.05;
+                // Gentle mouse-reactive tilt on top of the scroll path
+                model.rotation.y += (targetX * 1.0 - model.rotation.y) * 0.04;
+                model.rotation.x += (targetY * 0.5 - model.rotation.x) * 0.04;
+            }
+
+            if (cameraPath) {
+                const targetPos = cameraPath.getPointAt(Math.min(scrollProgress, 0.999));
+                camera.position.lerp(targetPos, 0.07);
+                camera.lookAt(0, 0, 0);
             }
 
             renderer.render(scene, camera);
         }
         animate();
 
-        // Manage responsive window reshaping
+        // ---------- Responsive resize ----------
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
