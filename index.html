@@ -143,10 +143,16 @@
             model.position.y -= center.y;
             model.position.z -= center.z;
 
-            // Add the hologram rim to every mesh in the model
+            // Add the hologram rim to every mesh in the model.
+            // IMPORTANT: collect the meshes first, then add rims afterward —
+            // adding children while traverse() is still running causes traverse
+            // to walk into the newly-added rim meshes too, which are themselves
+            // meshes, triggering runaway nested rims (stack overflow at render time).
+            const meshesToAugment = [];
             model.traverse((child) => {
-                if (child.isMesh) addHologramRim(child);
+                if (child.isMesh) meshesToAugment.push(child);
             });
+            meshesToAugment.forEach(addHologramRim);
 
             // Build a fly-through path sized to the model
             const size = box.getSize(new THREE.Vector3());
