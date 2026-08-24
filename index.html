@@ -17,14 +17,12 @@
     <div id="loading" class="loading-text">LOADING 3D MODEL...</div>
     <div id="canvas-container"></div>
 
-    <!-- Import maps polyfill to support older browser configurations -->
-    <script async src="https://esm.sh"></script>
-
+    <!-- Import map: pin an actual Three.js version so the module URLs resolve -->
     <script type="importmap">
       {
         "imports": {
-          "three": "https://esm.sh",
-          "three/addons/": "https://esm.sh/examples/jsm/"
+          "three": "https://esm.sh/three@0.160.0",
+          "three/addons/": "https://esm.sh/three@0.160.0/examples/jsm/"
         }
       }
     </script>
@@ -36,12 +34,12 @@
         // Setup the baseline WebGL Scene environments
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 0, 8); 
+        camera.position.set(0, 0, 8);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.toneMapping = THREE.ACESFilmicToneMapping; 
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1.2;
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
@@ -53,26 +51,24 @@
         mainLight.position.set(5, 10, 7);
         scene.add(mainLight);
 
-        // Load the model directly from your raw GitHub Pages link
+        // Load the model — relative path, since scene.gltf sits next to this file
         const loader = new GLTFLoader();
         let model;
-        
-        // This targets your exact uploaded scene.gltf file path
-        const modelPath = 'https://github.io';
+        const modelPath = 'scene.gltf';
 
         loader.load(modelPath, function (gltf) {
             model = gltf.scene;
             scene.add(model);
-            
+
             // Hide the loading text once complete
             document.getElementById('loading').style.display = 'none';
-            
+
             // Auto-center the imported object bounds inside the viewport camera
             const box = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
-            model.position.x += (model.position.x - center.x);
-            model.position.y += (model.position.y - center.y);
-            model.position.z += (model.position.z - center.z);
+            model.position.x -= center.x;
+            model.position.y -= center.y;
+            model.position.z -= center.z;
         }, undefined, function (error) {
             console.error('Error loading glTF layout:', error);
             document.getElementById('loading').innerText = 'Failed to load 3D asset.';
@@ -90,13 +86,13 @@
         // Animation update loop frame sequence
         function animate() {
             requestAnimationFrame(animate);
-            
+
             // Smoothly rotate the asset towards the user's cursor orientation
             if (model) {
                 model.rotation.y += (targetX * 2.5 - model.rotation.y) * 0.05;
                 model.rotation.x += (targetY * 2.5 - model.rotation.x) * 0.05;
             }
-            
+
             renderer.render(scene, camera);
         }
         animate();
