@@ -4,13 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Interactive 3D Model</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --glow-a: #4ff0ff;
+            --glow-b: #b45cff;
+            --glow-c: #ff4fd8;
+        }
+        * { box-sizing: border-box; }
         html, body {
             margin: 0;
-            background-color: #0d0d11;
-            font-family: sans-serif;
-            /* Tall page so there's room to scroll through the fly-through */
-            height: 400vh;
+            background-color: #06060a;
+            font-family: 'Inter', sans-serif;
+            color: #f2f2f7;
         }
         #canvas-container {
             position: fixed;
@@ -23,20 +31,193 @@
         .loading-text {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             color: white; font-size: 1.5rem; letter-spacing: 2px; pointer-events: none;
-            z-index: 2;
+            z-index: 5; font-family: 'Orbitron', sans-serif;
         }
         .scroll-hint {
             position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-            color: rgba(255,255,255,0.6); font-size: 0.85rem; letter-spacing: 3px;
-            pointer-events: none; z-index: 2; transition: opacity 0.4s ease;
+            color: rgba(255,255,255,0.55); font-size: 0.8rem; letter-spacing: 4px;
+            pointer-events: none; z-index: 5; transition: opacity 0.4s ease;
+            text-transform: uppercase; font-family: 'Inter', sans-serif;
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
+        }
+        .scroll-hint .arrow {
+            width: 10px; height: 10px; border-right: 2px solid rgba(255,255,255,0.55);
+            border-bottom: 2px solid rgba(255,255,255,0.55); transform: rotate(45deg);
+            animation: bob 1.6s ease-in-out infinite;
+        }
+        @keyframes bob {
+            0%, 100% { transform: rotate(45deg) translate(0,0); }
+            50% { transform: rotate(45deg) translate(6px, 6px); }
+        }
+
+        /* ---------- Content layer ---------- */
+        .content {
+            position: relative;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .panel {
+            min-height: 100vh;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8vh 6vw;
+            perspective: 1400px;
+        }
+        .panel-inner {
+            max-width: 780px;
+            text-align: center;
+            will-change: transform, opacity;
+            transform-style: preserve-3d;
+        }
+        .eyebrow {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.8rem;
+            letter-spacing: 5px;
             text-transform: uppercase;
+            color: var(--glow-a);
+            margin-bottom: 1.2rem;
+            opacity: 0.85;
+        }
+        h1.headline {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 900;
+            font-size: clamp(2.6rem, 8vw, 6.5rem);
+            line-height: 1.02;
+            margin: 0 0 1.2rem 0;
+            letter-spacing: 1px;
+            background: linear-gradient(100deg, var(--glow-a), var(--glow-b) 50%, var(--glow-c));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 0 60px rgba(180, 92, 255, 0.25);
+        }
+        h2.headline {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: clamp(2rem, 5.5vw, 3.6rem);
+            line-height: 1.08;
+            margin: 0 0 1.1rem 0;
+            letter-spacing: 0.5px;
+            background: linear-gradient(100deg, var(--glow-a), var(--glow-b) 60%, var(--glow-c));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .lede {
+            font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+            line-height: 1.6;
+            color: rgba(242,242,247,0.78);
+            font-weight: 400;
+            max-width: 620px;
+            margin: 0 auto;
+        }
+        .stat-row {
+            display: flex;
+            gap: clamp(1.5rem, 4vw, 3.5rem);
+            justify-content: center;
+            margin-top: 2.4rem;
+            flex-wrap: wrap;
+        }
+        .stat {
+            font-family: 'Orbitron', sans-serif;
+        }
+        .stat .num {
+            font-size: clamp(1.8rem, 3vw, 2.6rem);
+            font-weight: 700;
+            color: var(--glow-a);
+            display: block;
+        }
+        .stat .label {
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(242,242,247,0.55);
+        }
+        .tag-row {
+            display: flex;
+            gap: 0.7rem;
+            justify-content: center;
+            margin-top: 2.2rem;
+            flex-wrap: wrap;
+        }
+        .tag {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.78rem;
+            letter-spacing: 1px;
+            padding: 0.5rem 1rem;
+            border-radius: 999px;
+            border: 1px solid rgba(180, 92, 255, 0.35);
+            background: rgba(180, 92, 255, 0.08);
+            color: rgba(242,242,247,0.85);
+        }
+        .final-note {
+            margin-top: 2rem;
+            font-size: 0.85rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(242,242,247,0.4);
         }
     </style>
 </head>
 <body>
     <div id="loading" class="loading-text">LOADING 3D MODEL...</div>
-    <div id="scroll-hint" class="scroll-hint">Scroll to explore</div>
+    <div id="scroll-hint" class="scroll-hint">
+        <span>Scroll to explore</span>
+        <span class="arrow"></span>
+    </div>
     <div id="canvas-container"></div>
+
+    <div class="content">
+        <section class="panel" data-panel>
+            <div class="panel-inner">
+                <div class="eyebrow">Interactive 3D Experience</div>
+                <h1 class="headline">SEE IT.<br>MOVE IT.<br>FEEL IT.</h1>
+                <p class="lede">Scroll to fly through a fully interactive, real-time 3D scene — rendered live, right here in your browser.</p>
+            </div>
+        </section>
+
+        <section class="panel" data-panel>
+            <div class="panel-inner">
+                <h2 class="headline">Fly Through Space</h2>
+                <p class="lede">Your scroll position drives a cinematic camera path around the model. No clicking, no dragging — the further you scroll, the further the camera travels.</p>
+            </div>
+        </section>
+
+        <section class="panel" data-panel>
+            <div class="panel-inner">
+                <h2 class="headline">Iridescent Hologram Shell</h2>
+                <p class="lede">A custom fresnel shader wraps the model in a shifting rainbow glow that reacts to your viewing angle, cycling smoothly in real time.</p>
+                <div class="tag-row">
+                    <span class="tag">Fresnel Shading</span>
+                    <span class="tag">Additive Blending</span>
+                    <span class="tag">Live Hue Cycle</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" data-panel>
+            <div class="panel-inner">
+                <h2 class="headline">Built On WebGL &amp; Three.js</h2>
+                <p class="lede">Real-time lighting, glTF geometry, and GPU-accelerated shaders — all running smoothly on a single page, no plugins required.</p>
+                <div class="stat-row">
+                    <div class="stat"><span class="num">60</span><span class="label">FPS Target</span></div>
+                    <div class="stat"><span class="num">100%</span><span class="label">In-Browser</span></div>
+                    <div class="stat"><span class="num">0</span><span class="label">Plugins</span></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" data-panel>
+            <div class="panel-inner">
+                <h2 class="headline">Keep Scrolling</h2>
+                <p class="lede">This is just the beginning — imagine what an experience like this could showcase for your own product, brand, or portfolio.</p>
+                <div class="final-note">— End of the fly-through —</div>
+            </div>
+        </section>
+    </div>
 
     <!-- Import map: pinned Three.js version so module URLs resolve reliably -->
     <script type="importmap">
@@ -73,9 +254,6 @@
         scene.add(mainLight);
 
         // ---------- Hologram rim shader ----------
-        // A slightly-larger, additive, backside-rendered clone of each mesh that glows
-        // more at grazing angles (fresnel) and cycles hue over time. Sits on top of the
-        // real textured mesh without hiding it.
         const hologramVertex = `
             varying vec3 vNormal;
             varying vec3 vViewDir;
@@ -103,7 +281,7 @@
                 gl_FragColor = vec4(color, fresnel * 0.85);
             }
         `;
-        const hologramMaterials = []; // keep refs so we can update uTime each frame
+        const hologramMaterials = [];
 
         function addHologramRim(mesh) {
             const rimMat = new THREE.ShaderMaterial({
@@ -117,7 +295,7 @@
             });
             const rimMesh = new THREE.Mesh(mesh.geometry, rimMat);
             rimMesh.scale.copy(mesh.scale).multiplyScalar(1.035);
-            mesh.add(rimMesh); // parent to original mesh so it follows position/rotation
+            mesh.add(rimMesh);
             hologramMaterials.push(rimMat);
         }
 
@@ -126,7 +304,6 @@
         let model;
         const modelPath = 'scene.gltf';
 
-        // Camera fly-through path — built after we know the model's size
         let cameraPath = null;
         let scrollProgress = 0;
 
@@ -136,25 +313,19 @@
 
             document.getElementById('loading').style.display = 'none';
 
-            // Center the model at the origin
             const box = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
             model.position.x -= center.x;
             model.position.y -= center.y;
             model.position.z -= center.z;
 
-            // Add the hologram rim to every mesh in the model.
-            // IMPORTANT: collect the meshes first, then add rims afterward —
-            // adding children while traverse() is still running causes traverse
-            // to walk into the newly-added rim meshes too, which are themselves
-            // meshes, triggering runaway nested rims (stack overflow at render time).
+            // Collect meshes first, THEN add rims — never mutate children mid-traverse
             const meshesToAugment = [];
             model.traverse((child) => {
                 if (child.isMesh) meshesToAugment.push(child);
             });
             meshesToAugment.forEach(addHologramRim);
 
-            // Build a fly-through path sized to the model
             const size = box.getSize(new THREE.Vector3());
             const r = Math.max(size.x, size.y, size.z, 1) * 1.4;
 
@@ -172,17 +343,41 @@
             document.getElementById('loading').innerText = 'Failed to load 3D asset.';
         });
 
-        // ---------- Scroll-driven fly-through ----------
+        // ---------- Scroll progress ----------
         function updateScrollProgress() {
             const max = document.body.scrollHeight - window.innerHeight;
             scrollProgress = max > 0 ? window.scrollY / max : 0;
             scrollProgress = Math.min(Math.max(scrollProgress, 0), 1);
 
             const hint = document.getElementById('scroll-hint');
-            hint.style.opacity = scrollProgress > 0.03 ? '0' : '1';
+            hint.style.opacity = scrollProgress > 0.02 ? '0' : '1';
         }
         window.addEventListener('scroll', updateScrollProgress);
         updateScrollProgress();
+
+        // ---------- Panels: 3D scroll reveal ----------
+        const panelInners = Array.from(document.querySelectorAll('[data-panel] .panel-inner'));
+
+        function updatePanels() {
+            const vh = window.innerHeight;
+            for (const el of panelInners) {
+                const rect = el.getBoundingClientRect();
+                const elCenter = rect.top + rect.height / 2;
+                const distance = elCenter - vh / 2;
+                let progress = 1 - Math.min(Math.abs(distance) / (vh * 0.7), 1);
+                progress = Math.max(0, Math.min(1, progress));
+
+                const rotate = (1 - progress) * 32;
+                const rise = (1 - progress) * 70;
+                const depth = (1 - progress) * -260;
+                const scale = 0.86 + 0.14 * progress;
+                const dir = distance > 0 ? 1 : -1;
+
+                el.style.opacity = progress.toFixed(3);
+                el.style.transform =
+                    `perspective(1400px) rotateX(${(-rotate * dir).toFixed(2)}deg) translateY(${(rise * dir).toFixed(1)}px) translateZ(${depth.toFixed(1)}px) scale(${scale.toFixed(3)})`;
+            }
+        }
 
         // ---------- Mouse-follow (subtle secondary rotation on the model itself) ----------
         let targetX = 0;
@@ -199,13 +394,11 @@
             requestAnimationFrame(animate);
             const elapsed = clock.getElapsedTime();
 
-            // Update hologram shader time uniform
             for (const mat of hologramMaterials) {
                 mat.uniforms.uTime.value = elapsed;
             }
 
             if (model) {
-                // Gentle mouse-reactive tilt on top of the scroll path
                 model.rotation.y += (targetX * 1.0 - model.rotation.y) * 0.04;
                 model.rotation.x += (targetY * 0.5 - model.rotation.x) * 0.04;
             }
@@ -216,6 +409,7 @@
                 camera.lookAt(0, 0, 0);
             }
 
+            updatePanels();
             renderer.render(scene, camera);
         }
         animate();
@@ -225,6 +419,7 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            updateScrollProgress();
         });
     </script>
 </body>
